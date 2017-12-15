@@ -1,0 +1,12 @@
+{
+  "name": "@rasphilco/fjord",
+  "version": "0.1.0",
+  "description": "Simplified local node app development for MacOS",
+  "repository": "http://github.com/rasphilco/fjord.git",
+  "bin": {
+    "fj": "./fj"
+  },
+  "dependencies": {
+    "heroku-buildpack-nodejs": "git://github.com/heroku/heroku-buildpack-nodejs#master"
+  }
+}

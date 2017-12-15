@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+
+start () {
+  local cmd=$1
+  local port=$2
+  local deps="${@:3}"
+  local fjord_dir="$HOME/.config/yarn/global/node_modules/fjord"
+  local bp_dir=${fjord_dir}/node_modules/heroku-buildpack-nodejs
+  local app_dir=`pwd`
+  local build="
+NPM_CONFIG_PRODUCTION=false NODE_ENV=development /fjord/compile;
+NPM_CONFIG_PRODUCTION=false NODE_ENV=development source /root/.profile.d/nodejs.sh;
+NPM_CONFIG_PRODUCTION=false NODE_ENV=development /fjord/deps $deps;
+echo '';
+echo '-----> Exporting node env vars to bash';
+echo '';
+echo '-----> Change directory to app source';
+cd /src && echo `       pwd` && echo '';
+NPM_CONFIG_PRODUCTION=false NODE_ENV=development bash && source /root/.profile.d/nodejs.sh;
+"
+
+  echo "Building app in $app_dir"
+  echo ''
+
+  docker run -p 127.0.0.1:$port:$port \
+              -v ${fjord_dir}:/fjord \
+              -v ${bp_dir}:/buildpack \
+              -v ${app_dir}:/src:rw \
+              --rm \
+              -it \
+              -e "STACK=heroku-16" \
+              heroku/heroku:16 \
+              bash -c "$build"
+}
+
+start $@;

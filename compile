@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+
+mktmpdir() {
+  local dir=$(mktemp -t testXXXXX)
+  rm -rf $dir
+  mkdir $dir
+  echo $dir
+}
+
+compile() {
+  local bp_dir=$(mktmpdir)
+  local build_dir=$(mktmpdir)
+  local cache_dir=$(mktmpdir)
+  echo "Compiling $fixture"
+  echo "in $build_dir"
+  echo "(caching in $cache_dir)"
+  cp -a /buildpack/* ${bp_dir}
+  # cp -a ${bp_dir}/app/. ${build_dir}
+  cp -a /src/. ${build_dir}
+  "$bp_dir/bin/compile" "$build_dir" "$cache_dir"
+
+  mv ${build_dir}/.heroku /root
+  mv ${build_dir}/.profile.d /root
+  rm -fr /src/node_modules
+  mv ${build_dir}/node_modules /src
+}
+
+compile
