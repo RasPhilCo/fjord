@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "description": "Simplified local node app development for MacOS",
   "repository": "http://github.com/rasphilco/fjord.git",
+  "license": "ISC",
   "bin": {
     "fj": "./fj"
   },
