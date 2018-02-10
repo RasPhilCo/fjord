@@ -2,6 +2,3 @@
 # yarn lockfile v1
 
 
-"heroku-buildpack-nodejs@git://github.com/heroku/heroku-buildpack-nodejs#master":
-  version "0.0.0"
-  resolved "git://github.com/heroku/heroku-buildpack-nodejs#6c52af1e50393cd8ccf9e2150a94b47bcc96e953"

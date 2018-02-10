@@ -1,11 +1,13 @@
 fjord
 ===
 
-Simplified local node app development for MacOS. Powered by [Heroku buildpacks](https://devcenter.heroku.com/articles/buildpacks).
+**THIS PROJECT IS IN EARLY ALPHA DEVELOPMENT. USE WITH CAUTION.**
+
+Simplified local node/python/ruby app development for MacOS. Powered by [Heroku buildpacks](https://devcenter.heroku.com/articles/buildpacks).
 
 #### Install
 
-`$ yarn global add @rasphilco/fjord`
+`$ npm install -g RasPhilCo/fjord`
 
 #### Requirements
 
@@ -15,9 +17,20 @@ Simplified local node app development for MacOS. Powered by [Heroku buildpacks](
 
 #### Run
 
-Build your app and open a ready-to-work bash session via `fj start <EXPOSED-PORT> <GLOBAL-NPM-DEPS>...`. For example:
+Build your app and open a ready-to-work bash session via `fj start <EXPOSED-PORT> <OPTIONAL-GLOBAL-LANGUAGE-DEPS>...`. For example:
 
-`$ fj start 8000 foreman`
+```
+# node
+$ fj start 5000 nodemon
+
+# python
+$ fj start 8080
+
+# ruby
+$ fj start 3000
+```
+
+All language builds come with foreman/node-foreman/honcho for running Procfiles.
 
 #### Gotchas
 

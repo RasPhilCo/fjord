@@ -8,6 +8,5 @@
     "fj": "./fj"
   },
   "dependencies": {
-    "heroku-buildpack-nodejs": "git://github.com/heroku/heroku-buildpack-nodejs#master"
   }
 }
