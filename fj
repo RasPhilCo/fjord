@@ -1,36 +1,86 @@
 #!/usr/bin/env bash
 
-start () {
-  local cmd=$1
-  local port=$2
-  local deps="${@:3}"
-  local fjord_dir="$HOME/.config/yarn/global/node_modules/fjord"
-  local bp_dir=${fjord_dir}/node_modules/heroku-buildpack-nodejs
-  local app_dir=`pwd`
-  local build="
-NPM_CONFIG_PRODUCTION=false NODE_ENV=development /fjord/compile;
-NPM_CONFIG_PRODUCTION=false NODE_ENV=development source /root/.profile.d/nodejs.sh;
-NPM_CONFIG_PRODUCTION=false NODE_ENV=development /fjord/deps $deps;
+set_nodejs_build_script () {
+language_build_script="
+NPM_CONFIG_PRODUCTION=false NODE_ENV=development /fjord/builds/nodejs/compile;
+echo NPM_CONFIG_PRODUCTION=false >> /root/.profile.d/nodejs.sh;
+echo NODE_ENV=development >> /root/.profile.d/nodejs.sh;
+source /root/.profile.d/nodejs.sh;
+npm install -g nf;
+/fjord/builds/nodejs/deps $deps;
 echo '';
 echo '-----> Exporting node env vars to bash';
 echo '';
-echo '-----> Change directory to app source';
-cd /src && echo `       pwd` && echo '';
-NPM_CONFIG_PRODUCTION=false NODE_ENV=development bash && source /root/.profile.d/nodejs.sh;
 "
-
-  echo "Building app in $app_dir"
-  echo ''
-
-  docker run -p 127.0.0.1:$port:$port \
-              -v ${fjord_dir}:/fjord \
-              -v ${bp_dir}:/buildpack \
-              -v ${app_dir}:/src:rw \
-              --rm \
-              -it \
-              -e "STACK=heroku-16" \
-              heroku/heroku:16 \
-              bash -c "$build"
 }
 
-start $@;
+set_python_build_script () {
+language_build_script="
+/fjord/builds/python/compile;
+echo \"export PATH=/app/.heroku/python/bin:\$PATH\" >> /app/.profile.d/python.sh
+source /app/.profile.d/python.sh;
+source /app/.profile.d/python.gunicorn.sh;
+pip install honcho;
+/fjord/builds/python/deps $deps;
+echo '';
+echo '-----> Exporting python env vars to bash';
+echo '';
+"
+}
+
+set_language () {
+  if [ -f "package.json" ]; then
+    language='nodejs'
+  elif [ -f "./Gemfile" ]; then
+    echo 'ruby coming soon!'
+    exit 0
+  elif [ -f "./requirements.txt" ]; then
+    language='python'
+  fi
+}
+
+set_build_script () {
+build_script="
+mkdir /buildpack;
+git clone https://github.com/heroku/heroku-buildpack-$language.git /buildpack;
+mkdir /fjord;
+git clone https://github.com/rasphilco/fjord.git /fjord;
+$language_build_script
+echo '-----> Change directory to app source';
+cd /src && echo '';
+bash;
+"
+}
+
+start_runner () {
+  local cmd=$1
+  local port=$2
+  local deps="${@:3}"
+  local app_dir=`pwd`
+  local language
+
+  set_language;
+
+  if [ -n $language ]; then
+    echo "Building $language app in $app_dir"
+
+    local build_script
+    local language_build_script
+
+    set_${language}_build_script;
+    set_build_script;
+
+    docker run -p 127.0.0.1:$port:$port \
+                -v ${app_dir}:/src:rw \
+                --rm \
+                -it \
+                -e "STACK=heroku-16" \
+                heroku/heroku:16 \
+                bash -c "$build_script"
+    exit 0
+  fi
+  exit 1
+}
+
+
+start_runner $@;

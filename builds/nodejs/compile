@@ -1,21 +1,19 @@
 #!/usr/bin/env bash
 
 mktmpdir() {
-  local dir=$(mktemp -t testXXXXX)
+  local dir=$(mktemp -t $1XXXXX)
   rm -rf $dir
   mkdir $dir
   echo $dir
 }
 
 compile() {
-  local bp_dir=$(mktmpdir)
-  local build_dir=$(mktmpdir)
-  local cache_dir=$(mktmpdir)
-  echo "Compiling $fixture"
-  echo "in $build_dir"
+  local bp_dir=$(mktmpdir "buildpack")
+  local build_dir=$(mktmpdir "build")
+  local cache_dir=$(mktmpdir "cache")
+  echo "Compiling app in $build_dir"
   echo "(caching in $cache_dir)"
   cp -a /buildpack/* ${bp_dir}
-  # cp -a ${bp_dir}/app/. ${build_dir}
   cp -a /src/. ${build_dir}
   "$bp_dir/bin/compile" "$build_dir" "$cache_dir"
 
