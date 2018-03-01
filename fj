@@ -1,5 +1,18 @@
 #!/usr/bin/env bash
 
+get_script_dir () {
+  SOURCE="${BASH_SOURCE[0]}"
+  # While $SOURCE is a symlink, resolve it
+  while [ -h "$SOURCE" ]; do
+      DIR="$( cd -P "$( dirname "$SOURCE" )" && pwd )"
+      SOURCE="$( readlink "$SOURCE" )"
+      # If $SOURCE was a relative symlink (so no "/" as prefix, need to resolve it relative to the symlink base directory
+      [[ $SOURCE != /* ]] && SOURCE="$DIR/$SOURCE"
+  done
+  DIR="$( cd -P "$( dirname "$SOURCE" )" && pwd )"
+  echo "$DIR"
+}
+
 set_nodejs_build_script () {
 language_build_script="
 NPM_CONFIG_PRODUCTION=false NODE_ENV=development /fjord/builds/nodejs/compile;
@@ -7,10 +20,6 @@ echo NPM_CONFIG_PRODUCTION=false >> /root/.profile.d/nodejs.sh;
 echo NODE_ENV=development >> /root/.profile.d/nodejs.sh;
 source /root/.profile.d/nodejs.sh;
 npm install -g nf;
-/fjord/builds/nodejs/deps $deps;
-echo '';
-echo '-----> Exporting node env vars to bash';
-echo '';
 "
 }
 
@@ -21,10 +30,6 @@ echo \"export PATH=/app/.heroku/python/bin:\$PATH\" >> /app/.profile.d/python.sh
 source /app/.profile.d/python.sh;
 source /app/.profile.d/python.gunicorn.sh;
 pip install honcho;
-/fjord/builds/python/deps $deps;
-echo '';
-echo '-----> Exporting python env vars to bash';
-echo '';
 "
 }
 
@@ -41,11 +46,11 @@ set_language () {
 
 set_build_script () {
 build_script="
-mkdir /buildpack;
-git clone https://github.com/heroku/heroku-buildpack-$language.git /buildpack;
-mkdir /fjord;
-git clone https://github.com/rasphilco/fjord.git /fjord;
 $language_build_script
+/fjord/builds/$language/deps $deps;
+echo '';
+echo '-----> Exporting $language env vars to bash';
+echo '';
 echo '-----> Change directory to app source';
 cd /src && echo '';
 bash;
@@ -66,11 +71,14 @@ start_runner () {
 
     local build_script
     local language_build_script
-
     set_${language}_build_script;
     set_build_script;
 
+    echo $(get_script_dir)
+
     docker run -p 127.0.0.1:$port:$port \
+                -v "$(get_script_dir)/packs/heroku-buildpack-$language":/buildpack:ro \
+                -v $(get_script_dir):/fjord:ro \
                 -v ${app_dir}:/src:rw \
                 --rm \
                 -it \
