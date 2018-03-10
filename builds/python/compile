@@ -11,9 +11,10 @@ compile() {
   local bp_dir=$(mktmpdir "buildpack")
   local build_dir=$(mktmpdir "build")
   local cache_dir=$(mktmpdir "cache")
-  echo "Compiling app in $build_dir"
+  echo ""
+  echo "Compiling python app in $build_dir"
   echo "(caching in $cache_dir)"
-  cp -a /buildpack/* ${bp_dir}
+  cp -a /buildpacks/heroku-buildpack-python/* ${bp_dir}
   cp -a /src/. ${build_dir}
   "$bp_dir/bin/compile" "$build_dir" "$cache_dir"
 

@@ -13,19 +13,16 @@ get_script_dir () {
   echo "$DIR"
 }
 
-set_nodejs_build_script () {
-language_build_script="
-NPM_CONFIG_PRODUCTION=false NODE_ENV=development /fjord/builds/nodejs/compile;
-echo NPM_CONFIG_PRODUCTION=false >> /root/.profile.d/nodejs.sh;
-echo NODE_ENV=development >> /root/.profile.d/nodejs.sh;
+nodejs_build_script () {
+echo "NPM_CONFIG_PRODUCTION=false NODE_ENV=development /fjord/builds/nodejs/compile;
+echo \"NPM_CONFIG_PRODUCTION=false;NODE_ENV=development\" >> /root/.profile.d/nodejs.sh;
 source /root/.profile.d/nodejs.sh;
-npm install -g nf;
+# npm install -g nf;
 "
 }
 
-set_python_build_script () {
-language_build_script="
-/fjord/builds/python/compile;
+python_build_script () {
+echo "/fjord/builds/python/compile;
 echo \"export PATH=/app/.heroku/python/bin:\$PATH\" >> /app/.profile.d/python.sh
 source /app/.profile.d/python.sh;
 source /app/.profile.d/python.gunicorn.sh;
@@ -33,51 +30,52 @@ pip install honcho;
 "
 }
 
-set_language () {
-  if [ -f "package.json" ]; then
-    language='nodejs'
-  elif [ -f "./Gemfile" ]; then
+determine_languages () {
+  if [ -f "./Gemfile" ]; then
     echo 'ruby coming soon!'
     exit 0
-  elif [ -f "./requirements.txt" ]; then
-    language='python'
+  fi
+  if [ -f "./requirements.txt" ]; then
+    languages="$languages python"
+  fi
+  if [ -f "package.json" ]; then
+    languages="$languages nodejs"
   fi
 }
 
-set_build_script () {
-build_script="
-$language_build_script
-/fjord/builds/$language/deps $deps;
-echo '';
-echo '-----> Exporting $language env vars to bash';
-echo '';
-echo '-----> Change directory to app source';
-cd /src && echo '';
-bash;
-"
-}
+# $language_build_script
+# /fjord/builds/$language/deps $deps;
+# echo \"\n-----> Exporting $language env vars to bash\";
+# bash;
 
 start_runner () {
   local cmd=$1
   local port=$2
   local deps="${@:3}"
   local app_dir=`pwd`
-  local language
+  local languages=""
 
-  set_language;
+  determine_languages;
 
-  if [ -n $language ]; then
-    echo "Building $language app in $app_dir"
+  if [[ ! -z $languages ]]; then
+    combined_language_script=""
 
-    local build_script
-    local language_build_script
-    set_${language}_build_script;
-    set_build_script;
+    for language in $languages; do
+      echo found: $language app
+      combined_language_script="$combined_language_script $("$language"_build_script)"
+    done
 
-    echo $(get_script_dir)
+    build_script="$combined_language_script;
+      echo '-----> Change directory to app source';
+      echo '';
+      cd /src;
+      bash;"
+
+    # echo $combined_build_script;
+    # echo $build_script
 
     docker run -p 127.0.0.1:$port:$port \
-                -v "$(get_script_dir)/packs/heroku-buildpack-$language":/buildpack:ro \
+                -v "$(get_script_dir)/buildpacks":/buildpacks:ro \
                 -v $(get_script_dir):/fjord:ro \
                 -v ${app_dir}:/src:rw \
                 --rm \
@@ -85,7 +83,6 @@ start_runner () {
                 -e "STACK=heroku-16" \
                 heroku/heroku:16 \
                 bash -c "$build_script"
-    exit 0
   fi
   exit 1
 }
