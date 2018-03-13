@@ -17,16 +17,14 @@ nodejs_build_script () {
 echo "NPM_CONFIG_PRODUCTION=false NODE_ENV=development /fjord/builds/nodejs/compile;
 echo \"NPM_CONFIG_PRODUCTION=false;NODE_ENV=development\" >> /root/.profile.d/nodejs.sh;
 source /root/.profile.d/nodejs.sh;
-# npm install -g nf;
 "
 }
 
 python_build_script () {
 echo "/fjord/builds/python/compile;
-echo \"export PATH=/app/.heroku/python/bin:\$PATH\" >> /app/.profile.d/python.sh
+echo \"export PATH=/app/.heroku/python/bin:\$PATH\" >> /app/.profile.d/python.sh;
 source /app/.profile.d/python.sh;
 source /app/.profile.d/python.gunicorn.sh;
-pip install honcho;
 "
 }
 
@@ -50,8 +48,8 @@ determine_languages () {
 
 start_runner () {
   local cmd=$1
-  local port=$2
-  local deps="${@:3}"
+  local port
+  local deps="${@:2}"
   local app_dir=`pwd`
   local languages=""
 
@@ -61,11 +59,33 @@ start_runner () {
     combined_language_script=""
 
     for language in $languages; do
-      echo found: $language app
+      echo "build: $language app"
       combined_language_script="$combined_language_script $("$language"_build_script)"
     done
 
-    build_script="$combined_language_script;
+    if [[ ! -z $deps ]]; then
+      for depmang in $deps; do
+        # echo $depmang
+        if [[ $depmang =~ ^--port= ]]; then
+          port="${depmang/--port=/}"
+          echo "expose: port $port"
+        elif [[ $depmang =~ ^--npm= ]]; then
+          echo "install: npm global dependencies"
+          lang_deps="${depmang/--npm=/}"
+          lang_deps="${lang_deps/,/ }"
+          lang_dep_script="npm install -g $lang_deps;"
+          combined_language_script="$combined_language_script $lang_dep_script"
+        elif [[ $depmang =~ ^--pip= ]]; then
+          echo "install: pip user dependencies"
+          lang_deps="${depmang/--pip=/}"
+          lang_deps="${lang_deps/,/ }"
+          lang_dep_script="pip install -u $lang_deps;"
+          combined_language_script="$combined_language_script $lang_dep_script"
+        fi
+      done
+    fi
+
+    build_script="$combined_language_script
       echo '-----> Change directory to app source';
       echo '';
       cd /src;
@@ -87,5 +107,33 @@ start_runner () {
   exit 1
 }
 
+sync_buildpacks () {
+  mkdir -p "$(get_script_dir)/buildpacks"
 
-start_runner $@;
+  languages="nodejs python ruby"
+
+  for language in $languages; do
+    echo "syncing $language buildpack"
+    lang_buildpack_dir="$(get_script_dir)/buildpacks/heroku-buildpack-$language"
+    if [ -d "$lang_buildpack_dir" ]; then
+      git --work-tree=$lang_buildpack_dir --git-dir=$lang_buildpack_dir/.git pull origin master
+    else
+      mkdir -p $lang_buildpack_dir
+      git clone "https://github.com/heroku/heroku-buildpack-$language" $lang_buildpack_dir
+    fi
+    echo ''
+  done
+}
+
+router () {
+  if [[ $1 = "sync" ]]; then
+    sync_buildpacks
+  elif [[ $1 = "build"  ]]; then
+    start_runner $@
+  else
+    # echo "Run fj help for usage"
+    echo "Command $1 not known"
+  fi
+}
+
+router $@;
