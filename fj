@@ -14,17 +14,16 @@ get_script_dir () {
 }
 
 nodejs_build_script () {
-echo "NPM_CONFIG_PRODUCTION=false NODE_ENV=development /fjord/builds/nodejs/compile;
-echo \"NPM_CONFIG_PRODUCTION=false;NODE_ENV=development\" >> /root/.profile.d/nodejs.sh;
+echo "NPM_CONFIG_PRODUCTION=false NODE_ENV=development /fjord/lib/compile nodejs;
+echo \"export NPM_CONFIG_PRODUCTION=false;export NODE_ENV=development;\" >> /root/.profile.d/nodejs.sh;
 source /root/.profile.d/nodejs.sh;
 "
 }
 
 python_build_script () {
-echo "/fjord/builds/python/compile;
-echo \"export PATH=/app/.heroku/python/bin:\$PATH\" >> /app/.profile.d/python.sh;
-source /app/.profile.d/python.sh;
-source /app/.profile.d/python.gunicorn.sh;
+echo "/fjord/lib/compile python;
+source /root/.profile.d/python.sh;
+source /root/.profile.d/python.gunicorn.sh;
 "
 }
 
@@ -45,13 +44,14 @@ determine_languages () {
 # /fjord/builds/$language/deps $deps;
 # echo \"\n-----> Exporting $language env vars to bash\";
 # bash;
+# echo \"export PATH=/root/.heroku/python/bin:\$PATH\" >> /app/.profile.d/python.sh;
 
 start_runner () {
   local cmd=$1
-  local port
   local deps="${@:2}"
   local app_dir=`pwd`
   local languages=""
+  local port
 
   determine_languages;
 
@@ -76,10 +76,10 @@ start_runner () {
           lang_dep_script="npm install -g $lang_deps;"
           combined_language_script="$combined_language_script $lang_dep_script"
         elif [[ $depmang =~ ^--pip= ]]; then
-          echo "install: pip user dependencies"
+          echo "install: additional pip dependencies"
           lang_deps="${depmang/--pip=/}"
           lang_deps="${lang_deps/,/ }"
-          lang_dep_script="pip install -u $lang_deps;"
+          lang_dep_script="pip install $lang_deps;"
           combined_language_script="$combined_language_script $lang_dep_script"
         fi
       done
@@ -95,7 +95,6 @@ start_runner () {
     # echo $build_script
 
     docker run -p 127.0.0.1:$port:$port \
-                -v "$(get_script_dir)/buildpacks":/buildpacks:ro \
                 -v $(get_script_dir):/fjord:ro \
                 -v ${app_dir}:/src:rw \
                 --rm \

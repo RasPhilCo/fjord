@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+
+mktmpdir() {
+  local dir=$(mktemp -t $1XXXXX)
+  rm -rf $dir
+  mkdir $dir
+  echo $dir
+}
+
+compile() {
+  language=$1
+  local bp_dir=$(mktmpdir "buildpack")
+  local build_dir=$(mktmpdir "build")
+  local cache_dir=$(mktmpdir "cache")
+  echo ""
+  echo "Compiling $language app in $build_dir"
+  echo "(caching in $cache_dir)"
+  cp -a /fjord/buildpacks/heroku-buildpack-$language/* ${bp_dir}
+  cp -a /src/. ${build_dir}
+  "$bp_dir/bin/compile" "$build_dir" "$cache_dir"
+
+  mkdir -p /root/.profile.d
+  cp ${build_dir}/.profile.d/* /root/.profile.d
+  mkdir -p /root/.heroku
+  cp -r ${build_dir}/.heroku/* /root/.heroku
+
+  if [[ $language = "nodejs" ]]; then
+    rm -fr /src/node_modules
+    mv ${build_dir}/node_modules /src
+  fi
+}
+
+compile $@
