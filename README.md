@@ -7,31 +7,42 @@ Simplified local node/python/ruby app development for MacOS. Powered by [Heroku 
 
 #### Install
 
-`$ npm install -g RasPhilCo/fjord`
+```
+$ npm install -g RasPhilCo/fjord
+```
 
 #### Requirements
 
 - Docker For Mac
 - Postgres.app (if you need a postgres server)
-- Redis Desktop Manager (if you need a redis server)
+- redis (if you need a redis server)
 
-#### Run
+#### Usage
 
-Build your app and open a ready-to-work bash session via `fj start <EXPOSED-PORT> <OPTIONAL-GLOBAL-LANGUAGE-DEPS>...`. For example:
-
+After install, grab the Heroku buildpacks (they are not packaged with fjord).
 ```
-# node
-$ fj start 5000 nodemon
-
-# python
-$ fj start 8080
-
-# ruby
-$ fj start 3000
+$ fj sync
 ```
 
-All language builds come with foreman/node-foreman/honcho for running Procfiles.
+Build your app and start a ready-to-work bash session via `build`:
+
+```
+$ fj build --port=<EXPOSED-PORT>
+```
+
+Fjord auto-detects the project's languages and their corresponding buildpacks it needs. Dependency mangers bundled with the buildpacks can be used for external dependencies (i.e. not app specific). For example:
+
+```
+# node buildpack (includes npm)
+$ fj build --port=5000 --npm=nf,nodemon
+
+# python buildpack (includes pip)
+$ fj build --port=8080 --pip=honcho
+
+# ruby buildpack (includes gem)
+$ fj build --port=3000 --gem=foreman
+```
 
 #### Gotchas
 
-Since DockerForMac runs in a VM, you'll need to update your development database `localhost` to `docker.for.mac.localhost` to hit Postgres.app or other running services on localhost.
+Since DockerForMac runs in a VM, you'll need to update your development database from `localhost` to `docker.for.mac.localhost` to hit Postgres.app or other running services on localhost. Project env vars are easily managed (and more secure!) with a manager like dotenv.
