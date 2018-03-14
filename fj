@@ -14,26 +14,31 @@ get_script_dir () {
 }
 
 nodejs_build_script () {
-echo "NPM_CONFIG_PRODUCTION=false NODE_ENV=development /fjord/lib/compile nodejs;
-echo \"export NPM_CONFIG_PRODUCTION=false;export NODE_ENV=development;\" >> /root/.profile.d/nodejs.sh;
-source /root/.profile.d/nodejs.sh;
-"
+  echo "NPM_CONFIG_PRODUCTION=false NODE_ENV=development /fjord/lib/compile nodejs;
+  echo \"export NPM_CONFIG_PRODUCTION=false;export NODE_ENV=development;\" >> /root/.profile.d/nodejs.sh;
+  source /root/.profile.d/nodejs.sh;
+  "
 }
 
 python_build_script () {
-echo "/fjord/lib/compile python;
-source /root/.profile.d/python.sh;
-source /root/.profile.d/python.gunicorn.sh;
-"
+  echo "/fjord/lib/compile python;
+  source /root/.profile.d/python.sh;
+  source /root/.profile.d/python.gunicorn.sh;
+  "
+}
+
+ruby_build_script () {
+  echo "/fjord/lib/compile ruby;
+  source /root/.profile.d/ruby.sh;
+  "
 }
 
 determine_languages () {
-  if [ -f "./Gemfile" ]; then
-    echo 'ruby coming soon!'
-    exit 0
-  fi
   if [ -f "./requirements.txt" ]; then
     languages="$languages python"
+  fi
+  if [ -f "./Gemfile" ]; then
+    languages="$languages ruby"
   fi
   if [ -f "package.json" ]; then
     languages="$languages nodejs"
@@ -80,6 +85,12 @@ start_runner () {
           lang_deps="${depmang/--pip=/}"
           lang_deps="${lang_deps/,/ }"
           lang_dep_script="pip install $lang_deps;"
+          combined_language_script="$combined_language_script $lang_dep_script"
+        elif [[ $depmang =~ ^--gem= ]]; then
+          echo "install: additional pip dependencies"
+          lang_deps="${depmang/--gem=/}"
+          lang_deps="${lang_deps/,/ }"
+          lang_dep_script="gem install $lang_deps;"
           combined_language_script="$combined_language_script $lang_dep_script"
         fi
       done
