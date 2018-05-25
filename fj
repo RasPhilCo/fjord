@@ -89,7 +89,7 @@ start_runner () {
           lang_dep_script="pip install $lang_deps;"
           combined_language_script="$combined_language_script $lang_dep_script"
         elif [[ $depmang =~ ^--gem= ]]; then
-          echo "install: additional pip dependencies"
+          echo "install: additional gem dependencies"
           lang_deps="${depmang/--gem=/}"
           lang_deps="${lang_deps/,/ }"
           lang_dep_script="gem install $lang_deps;"

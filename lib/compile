@@ -17,6 +17,12 @@ compile() {
   echo "(caching in $cache_dir)"
   cp -a /fjord/buildpacks/heroku-buildpack-$language/* ${bp_dir}
   cp -a /src/. ${build_dir}
+
+  if [[ $language = "ruby" ]]; then
+    export CURL_TIMEOUT=120
+    export CURL_CONNECT_TIMEOUT=15
+  fi
+
   "$bp_dir/bin/compile" "$build_dir" "$cache_dir"
 
   mkdir -p /root/.profile.d
