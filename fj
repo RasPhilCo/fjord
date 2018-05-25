@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+XDG_CACHE_HOME=${XDG_DATA_HOME:="$(cd && pwd)/Library/Caches"}
+
 get_script_dir () {
   SOURCE="${BASH_SOURCE[0]}"
   # While $SOURCE is a symlink, resolve it
@@ -34,7 +36,7 @@ ruby_build_script () {
 }
 
 determine_languages () {
-  if [ -f "./requirements.txt" ]; then
+  if [ -f "./requirements.txt" ] || [ -f "./Pipfile" ]; then
     languages="$languages python"
   fi
   if [ -f "./Gemfile" ]; then
@@ -106,7 +108,7 @@ start_runner () {
     # echo $build_script
 
     docker run -p 127.0.0.1:$port:$port \
-                -v $(get_script_dir):/fjord:ro \
+                -v "$XDG_CACHE_HOME/fjord":/fjord:ro \
                 -v ${app_dir}:/src:rw \
                 --rm \
                 -it \
@@ -118,13 +120,17 @@ start_runner () {
 }
 
 sync_buildpacks () {
-  mkdir -p "$(get_script_dir)/buildpacks"
+  local fj_cache="$XDG_CACHE_HOME/fjord"
+  cp -r "$(get_script_dir)/lib" $fj_cache
+
+  local bp_cache="$fj_cache/buildpacks"
+  mkdir -p $bp_cache
 
   languages="nodejs python ruby"
 
   for language in $languages; do
     echo "syncing $language buildpack"
-    lang_buildpack_dir="$(get_script_dir)/buildpacks/heroku-buildpack-$language"
+    lang_buildpack_dir="$bp_cache/heroku-buildpack-$language"
     if [ -d "$lang_buildpack_dir" ]; then
       git --work-tree=$lang_buildpack_dir --git-dir=$lang_buildpack_dir/.git pull origin master
     else
