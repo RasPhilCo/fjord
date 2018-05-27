@@ -134,13 +134,17 @@ sync_buildpacks () {
 }
 
 router () {
-  if [[ $1 = "sync" ]]; then
+  if [[ $1 = "help" ]]; then
+    echo "COMMANDS"
+    echo "  $ fj sync"
+    echo "  $ fj build --port=<port> --<dependency manager>=<dep>,<dep>"
+  elif [[ $1 = "sync" ]]; then
     sync_buildpacks
   elif [[ $1 = "build"  ]]; then
     start_runner $@
   else
-    # echo "Run fj help for usage"
     echo "Command $1 not known"
+    echo "Run $ fj help for COMMANDS"
   fi
 }
 
