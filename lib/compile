@@ -27,8 +27,16 @@ compile() {
 
   mkdir -p /root/.profile.d
   cp ${build_dir}/.profile.d/* /root/.profile.d
-  mkdir -p /root/.heroku
-  cp -r ${build_dir}/.heroku/* /root/.heroku
+
+  if [[ $language = "ruby" ]]; then
+    mkdir -p /root/bin
+    cp -r ${build_dir}/bin/* /root/bin
+    mkdir -p /root/vendor
+    cp -r ${build_dir}/vendor/* /root/vendor
+  else
+    mkdir -p /root/.heroku
+    cp -r ${build_dir}/.heroku/* /root/.heroku
+  fi
 
   if [[ $language = "nodejs" ]]; then
     rm -fr /src/node_modules

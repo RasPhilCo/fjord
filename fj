@@ -47,12 +47,6 @@ determine_languages () {
   fi
 }
 
-# $language_build_script
-# /fjord/builds/$language/deps $deps;
-# echo \"\n-----> Exporting $language env vars to bash\";
-# bash;
-# echo \"export PATH=/root/.heroku/python/bin:\$PATH\" >> /app/.profile.d/python.sh;
-
 start_runner () {
   local cmd=$1
   local deps="${@:2}"
@@ -72,7 +66,6 @@ start_runner () {
 
     if [[ ! -z $deps ]]; then
       for depmang in $deps; do
-        # echo $depmang
         if [[ $depmang =~ ^--port= ]]; then
           port="${depmang/--port=/}"
           echo "expose: port $port"
@@ -104,7 +97,6 @@ start_runner () {
       cd /src;
       bash;"
 
-    # echo $combined_build_script;
     # echo $build_script
 
     docker run -p 127.0.0.1:$port:$port \
