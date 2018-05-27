@@ -2,17 +2,8 @@
 
 XDG_CACHE_HOME=${XDG_DATA_HOME:="$(cd && pwd)/Library/Caches"}
 
-get_script_dir () {
-  SOURCE="${BASH_SOURCE[0]}"
-  # While $SOURCE is a symlink, resolve it
-  while [ -h "$SOURCE" ]; do
-      DIR="$( cd -P "$( dirname "$SOURCE" )" && pwd )"
-      SOURCE="$( readlink "$SOURCE" )"
-      # If $SOURCE was a relative symlink (so no "/" as prefix, need to resolve it relative to the symlink base directory
-      [[ $SOURCE != /* ]] && SOURCE="$DIR/$SOURCE"
-  done
-  DIR="$( cd -P "$( dirname "$SOURCE" )" && pwd )"
-  echo "$DIR"
+random_8_alphanumeric () {
+  echo "$(hexdump -n 4 -v -e '/1 "%02X"' /dev/urandom)"
 }
 
 nodejs_build_script () {
@@ -104,11 +95,25 @@ start_runner () {
                 -v ${app_dir}:/src:rw \
                 --rm \
                 -it \
+                --name "fjord_$(random_8_alphanumeric)" \
                 -e "STACK=heroku-16" \
                 heroku/heroku:16 \
                 bash -c "$build_script"
   fi
   exit 1
+}
+
+get_script_dir () {
+  SOURCE="${BASH_SOURCE[0]}"
+  # While $SOURCE is a symlink, resolve it
+  while [ -h "$SOURCE" ]; do
+      DIR="$( cd -P "$( dirname "$SOURCE" )" && pwd )"
+      SOURCE="$( readlink "$SOURCE" )"
+      # If $SOURCE was a relative symlink (so no "/" as prefix, need to resolve it relative to the symlink base directory
+      [[ $SOURCE != /* ]] && SOURCE="$DIR/$SOURCE"
+  done
+  DIR="$( cd -P "$( dirname "$SOURCE" )" && pwd )"
+  echo "$DIR"
 }
 
 sync_buildpacks () {
@@ -133,18 +138,34 @@ sync_buildpacks () {
   done
 }
 
+show_help () {
+  echo "COMMANDS"
+  echo "  $ fj sync"
+  echo "  $ fj build --port=<port> --<dependency manager>=<dep>,<dep>"
+}
+
+cleanup () {
+  if docker ps | grep "fjord_" > /dev/null; then
+    docker rm -f $(docker ps | grep "fjord_" | awk "{print \$1}")
+  fi
+}
+
+command_not_found () {
+  echo "Command $1 not known"
+  echo "Run $ fj help for COMMANDS"
+}
+
 router () {
   if [[ $1 = "help" ]]; then
-    echo "COMMANDS"
-    echo "  $ fj sync"
-    echo "  $ fj build --port=<port> --<dependency manager>=<dep>,<dep>"
+    show_help
   elif [[ $1 = "sync" ]]; then
     sync_buildpacks
   elif [[ $1 = "build"  ]]; then
     start_runner $@
+  elif [[ $1 = "cleanup"  ]]; then
+    cleanup
   else
-    echo "Command $1 not known"
-    echo "Run $ fj help for COMMANDS"
+    command_not_found
   fi
 }
 
