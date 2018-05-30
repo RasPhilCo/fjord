@@ -6,90 +6,95 @@ random_8_alphanumeric () {
   echo "$(hexdump -n 4 -v -e '/1 "%02X"' /dev/urandom)"
 }
 
-nodejs_build_script () {
-  echo "NPM_CONFIG_PRODUCTION=false NODE_ENV=development /fjord/lib/compile nodejs;
-  echo \"export NPM_CONFIG_PRODUCTION=false;export NODE_ENV=development;\" >> /root/.profile.d/nodejs.sh;
-  source /root/.profile.d/nodejs.sh;
-  "
-}
-
-python_build_script () {
-  echo "/fjord/lib/compile python;
-  source /root/.profile.d/python.sh;
-  source /root/.profile.d/python.gunicorn.sh;
-  "
-}
-
-ruby_build_script () {
-  echo "/fjord/lib/compile ruby;
-  source /root/.profile.d/ruby.sh;
-  "
-}
-
-determine_languages () {
-  if [ -f "./requirements.txt" ] || [ -f "./Pipfile" ]; then
-    languages="$languages python"
-  fi
-  if [ -f "./Gemfile" ]; then
-    languages="$languages ruby"
-  fi
-  if [ -f "package.json" ]; then
-    languages="$languages nodejs"
-  fi
-}
-
 start_runner () {
   local cmd=$1
   local deps="${@:2}"
   local app_dir=`pwd`
-  local languages=""
+  local languages
   local port
 
-  determine_languages;
+  local nodejs_build_script="
+  NPM_CONFIG_PRODUCTION=false NODE_ENV=development /fjord/lib/compile nodejs;
+  echo \"export NPM_CONFIG_PRODUCTION=false;export NODE_ENV=development;\" >> /root/.profile.d/nodejs.sh;
+  source /root/.profile.d/nodejs.sh;
+  "
 
-  if [[ ! -z $languages ]]; then
-    combined_language_script=""
+  local python_build_script="
+  /fjord/lib/compile python;
+  source /root/.profile.d/python.sh;
+  source /root/.profile.d/python.gunicorn.sh;
+  "
 
-    for language in $languages; do
-      echo "build: $language app"
-      combined_language_script="$combined_language_script $("$language"_build_script)"
+  local ruby_build_script="
+  /fjord/lib/compile ruby;
+  source /root/.profile.d/ruby.sh;
+  "
+
+  local combined_language_script
+
+  if [ -f "./requirements.txt" ] || [ -f "./Pipfile" ]; then
+    echo "build: python app"
+    combined_language_script="$combined_language_script $python_build_script"
+  fi
+  if [ -f "./Gemfile" ]; then
+    echo "build: ruby app"
+    combined_language_script="$combined_language_script $ruby_build_script"
+  fi
+  if [ -f "package.json" ]; then
+    echo "build: nodejs app"
+    combined_language_script="$combined_language_script $nodejs_build_script"
+  fi
+
+  if [[ -z $combined_language_script ]]; then
+    echo "No buildable language found"
+    exit 1
+  fi
+
+  if [[ ! -z $deps ]]; then
+    for depmang in $deps; do
+      if [[ $depmang =~ ^--port= ]]; then
+        port="${depmang/--port=/}"
+        echo "expose: port $port"
+      elif [[ $depmang =~ ^--npm= ]]; then
+        echo "install: npm global dependencies"
+        lang_deps="${depmang/--npm=/}"
+        lang_deps="${lang_deps/,/ }"
+        lang_dep_script="npm install -g $lang_deps;"
+      elif [[ $depmang =~ ^--pip= ]]; then
+        echo "install: additional pip dependencies"
+        lang_deps="${depmang/--pip=/}"
+        lang_deps="${lang_deps/,/ }"
+        lang_dep_script="pip install $lang_deps;"
+      elif [[ $depmang =~ ^--gem= ]]; then
+        echo "install: additional gem dependencies"
+        lang_deps="${depmang/--gem=/}"
+        lang_deps="${lang_deps/,/ }"
+        lang_dep_script="gem install $lang_deps;"
+      fi
+      combined_language_script="$combined_language_script $lang_dep_script"
     done
+  fi
 
-    if [[ ! -z $deps ]]; then
-      for depmang in $deps; do
-        if [[ $depmang =~ ^--port= ]]; then
-          port="${depmang/--port=/}"
-          echo "expose: port $port"
-        elif [[ $depmang =~ ^--npm= ]]; then
-          echo "install: npm global dependencies"
-          lang_deps="${depmang/--npm=/}"
-          lang_deps="${lang_deps/,/ }"
-          lang_dep_script="npm install -g $lang_deps;"
-          combined_language_script="$combined_language_script $lang_dep_script"
-        elif [[ $depmang =~ ^--pip= ]]; then
-          echo "install: additional pip dependencies"
-          lang_deps="${depmang/--pip=/}"
-          lang_deps="${lang_deps/,/ }"
-          lang_dep_script="pip install $lang_deps;"
-          combined_language_script="$combined_language_script $lang_dep_script"
-        elif [[ $depmang =~ ^--gem= ]]; then
-          echo "install: additional gem dependencies"
-          lang_deps="${depmang/--gem=/}"
-          lang_deps="${lang_deps/,/ }"
-          lang_dep_script="gem install $lang_deps;"
-          combined_language_script="$combined_language_script $lang_dep_script"
-        fi
-      done
-    fi
+  build_script="
+  $combined_language_script
+  echo '-----> Change directory to app source';
+  echo '';
+  cd /src;
+  bash;
+  "
 
-    build_script="$combined_language_script
-      echo '-----> Change directory to app source';
-      echo '';
-      cd /src;
-      bash;"
+  # echo $build_script
 
-    # echo $build_script
-
+  if [[ -z $port ]]; then
+    docker run  -v "$XDG_CACHE_HOME/fjord":/fjord:ro \
+                -v ${app_dir}:/src:rw \
+                --rm \
+                -it \
+                --name "fjord_$(random_8_alphanumeric)" \
+                -e "STACK=heroku-16" \
+                heroku/heroku:16 \
+                bash -c "$build_script"
+  else
     docker run -p 127.0.0.1:$port:$port \
                 -v "$XDG_CACHE_HOME/fjord":/fjord:ro \
                 -v ${app_dir}:/src:rw \
@@ -100,7 +105,6 @@ start_runner () {
                 heroku/heroku:16 \
                 bash -c "$build_script"
   fi
-  exit 1
 }
 
 get_script_dir () {
