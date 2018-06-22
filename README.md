@@ -43,6 +43,12 @@ $ fj build --port=8080 --pip=honcho
 $ fj build --port=3000 --gem=foreman
 ```
 
+Fjord destroys the container on exit. But just in case, you can cleanup all fjord containers with:
+
+```
+# fj cleanup
+```
+
 #### Gotchas
 
 Since DockerForMac runs in a VM, you'll need to update your development database from `localhost` to `docker.for.mac.localhost` to hit Postgres.app or other running services on localhost. Project env vars are easily managed (and more secure!) with a manager like dotenv.
