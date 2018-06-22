@@ -23,6 +23,10 @@ compile() {
     export CURL_CONNECT_TIMEOUT=15
   fi
 
+  if [[ $language = "python" ]]; then
+    echo "cats" >> "$build_dir/requirements.txt"
+  fi
+
   "$bp_dir/bin/compile" "$build_dir" "$cache_dir"
 
   mkdir -p /root/.profile.d

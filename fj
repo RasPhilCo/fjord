@@ -2,6 +2,10 @@
 
 XDG_CACHE_HOME=${XDG_DATA_HOME:="$(cd && pwd)/Library/Caches"}
 
+print_indent() {
+  echo "  $*" || true
+}
+
 random_8_alphanumeric () {
   echo "$(hexdump -n 4 -v -e '/1 "%02X"' /dev/urandom)"
 }
@@ -12,6 +16,9 @@ start_runner () {
   local app_dir=`pwd`
   local languages
   local port
+  local combined_buildpacks_script
+  local combined_additional_deps_script
+
 
   local nodejs_build_script="
   NPM_CONFIG_PRODUCTION=false NODE_ENV=development /fjord/lib/compile nodejs;
@@ -30,81 +37,97 @@ start_runner () {
   source /root/.profile.d/ruby.sh;
   "
 
-  local combined_language_script
+  include_python_buildpack () {
+    print_indent "build: python buildpack"
+    combined_buildpacks_script="$combined_buildpacks_script $python_build_script"
+  }
 
-  if [ -f "./requirements.txt" ] || [ -f "./Pipfile" ]; then
-    echo "build: python app"
-    combined_language_script="$combined_language_script $python_build_script"
-  fi
-  if [ -f "./Gemfile" ]; then
-    echo "build: ruby app"
-    combined_language_script="$combined_language_script $ruby_build_script"
-  fi
-  if [ -f "package.json" ]; then
-    echo "build: nodejs app"
-    combined_language_script="$combined_language_script $nodejs_build_script"
+  include_ruby_buildpack () {
+    print_indent "build: ruby buildpack"
+    combined_buildpacks_script="$combined_buildpacks_script $ruby_build_script"
+  }
+
+  include_nodejs_buildpack () {
+    print_indent "build: nodejs buildpack"
+    combined_buildpacks_script="$combined_buildpacks_script $nodejs_build_script"
+  }
+
+  determine_buildbacks () {
+    if [ -f "./requirements.txt" ] || [ -f "./Pipfile" ] || [[ $deps =~ --pip ]]; then
+      include_python_buildpack
+    fi
+
+    if [ -f "./Gemfile" ] || [[ $deps =~ --gem ]]; then
+      include_ruby_buildpack
+    fi
+
+    if [ -f "package.json" ] || [[ $deps =~ --npm ]]; then
+      include_nodejs_buildpack
+    fi
+
+    if [[ -z $combined_buildpacks_script ]]; then
+      print_indent "No buildable language found"
+      exit 1
+    fi
+  }
+
+  determine_additional_dependencies () {
+    if [[ ! -z $deps ]]; then
+      for depmang in $deps; do
+        if [[ $depmang =~ ^--port= ]]; then
+          port="${depmang/--port=/}"
+          print_indent "expose: port $port"
+        elif [[ $depmang =~ ^--npm= ]]; then
+          print_indent "install: npm global dependencies"
+          lang_deps="${depmang/--npm=/}"
+          lang_deps="${lang_deps/,/ }"
+          lang_dep_script="echo '-----> Install npm global dependencies';npm install -g $lang_deps;"
+        elif [[ $depmang =~ ^--pip= ]]; then
+          print_indent "install: additional pip dependencies"
+          lang_deps="${depmang/--pip=/}"
+          lang_deps="${lang_deps/,/ }"
+          lang_dep_script="echo '-----> Install additional pip dependencies';pip install $lang_deps;"
+        elif [[ $depmang =~ ^--gem= ]]; then
+          print_indent "install: additional gem dependencies"
+          lang_deps="${depmang/--gem=/}"
+          lang_deps="${lang_deps/,/ }"
+          lang_dep_script="echo '-----> Install additional gem dependencies';gem install $lang_deps;"
+        fi
+        combined_additional_deps_script="$combined_additional_deps_script echo; $lang_dep_script echo;"
+      done
+    fi
+  }
+
+  echo_build_script() {
+    echo "$combined_buildpacks_script
+    $combined_additional_deps_script
+    echo '-----> Change directory to app source';
+    echo '';
+    cd /src;
+    bash;
+    "
+  }
+
+  # echo_build_script
+
+  echo "fjord's To-do list--"
+  determine_buildbacks
+  determine_additional_dependencies
+
+  local port_flag=""
+  if [[ ! -z $port ]]; then
+    port_flag="-p 127.0.0.1:$port:$port"
   fi
 
-  if [[ -z $combined_language_script ]]; then
-    echo "No buildable language found"
-    exit 1
-  fi
-
-  if [[ ! -z $deps ]]; then
-    for depmang in $deps; do
-      if [[ $depmang =~ ^--port= ]]; then
-        port="${depmang/--port=/}"
-        echo "expose: port $port"
-      elif [[ $depmang =~ ^--npm= ]]; then
-        echo "install: npm global dependencies"
-        lang_deps="${depmang/--npm=/}"
-        lang_deps="${lang_deps/,/ }"
-        lang_dep_script="npm install -g $lang_deps;"
-      elif [[ $depmang =~ ^--pip= ]]; then
-        echo "install: additional pip dependencies"
-        lang_deps="${depmang/--pip=/}"
-        lang_deps="${lang_deps/,/ }"
-        lang_dep_script="pip install $lang_deps;"
-      elif [[ $depmang =~ ^--gem= ]]; then
-        echo "install: additional gem dependencies"
-        lang_deps="${depmang/--gem=/}"
-        lang_deps="${lang_deps/,/ }"
-        lang_dep_script="gem install $lang_deps;"
-      fi
-      combined_language_script="$combined_language_script $lang_dep_script"
-    done
-  fi
-
-  build_script="
-  $combined_language_script
-  echo '-----> Change directory to app source';
-  echo '';
-  cd /src;
-  bash;
-  "
-
-  # echo $build_script
-
-  if [[ -z $port ]]; then
-    docker run  -v "$XDG_CACHE_HOME/fjord":/fjord:ro \
-                -v ${app_dir}:/src:rw \
-                --rm \
-                -it \
-                --name "fjord_$(random_8_alphanumeric)" \
-                -e "STACK=heroku-16" \
-                heroku/heroku:16 \
-                bash -c "$build_script"
-  else
-    docker run -p 127.0.0.1:$port:$port \
-                -v "$XDG_CACHE_HOME/fjord":/fjord:ro \
-                -v ${app_dir}:/src:rw \
-                --rm \
-                -it \
-                --name "fjord_$(random_8_alphanumeric)" \
-                -e "STACK=heroku-16" \
-                heroku/heroku:16 \
-                bash -c "$build_script"
-  fi
+  docker run  -v "$XDG_CACHE_HOME/fjord":/fjord:ro \
+              $port_flag \
+              -v ${app_dir}:/src:rw \
+              --rm \
+              -it \
+              --name "fjord_$(random_8_alphanumeric)" \
+              -e "STACK=heroku-16" \
+              heroku/heroku:16 \
+              bash -c "$(echo_build_script)"
 }
 
 get_script_dir () {
@@ -146,6 +169,7 @@ show_help () {
   echo "COMMANDS"
   echo "  $ fj sync"
   echo "  $ fj build --port=<port> --<dependency manager>=<dep>,<dep>"
+  echo "  $ fj cleanup"
 }
 
 cleanup () {
@@ -155,7 +179,7 @@ cleanup () {
 }
 
 command_not_found () {
-  echo "Command $1 not known"
+  echo "Command $@ not known"
   echo "Run $ fj help for COMMANDS"
 }
 
@@ -169,7 +193,7 @@ router () {
   elif [[ $1 = "cleanup"  ]]; then
     cleanup
   else
-    command_not_found
+    command_not_found $1
   fi
 }
 
